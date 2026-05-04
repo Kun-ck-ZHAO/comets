@@ -1,0 +1,63 @@
+name: torchDL
+
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+
+dependencies:
+
+  # Python
+  - python=3.11
+
+  # Core scientific computing
+  - numpy=1.26
+  - scipy
+  - pandas
+  - xarray
+
+  # Machine learning
+  - scikit-learn
+  - numba
+  - umap-learn
+
+  # Deep learning (GPU)
+  - pytorch
+  - torchvision
+  - torchaudio
+  - pytorch-cuda=12.1
+
+  # Statistics
+  - statsmodels
+  - pingouin
+
+  # Visualization (static)
+  - matplotlib
+  - seaborn
+
+  # Visualization (interactive)
+  - plotly
+
+  # Jupyter
+  - jupyter
+  - jupyterlab
+  - ipykernel
+  - notebook
+
+  # Utilities (very useful)
+  - tqdm
+  - joblib
+  - h5py
+  - tables
+  - pyarrow
+
+  # File formats
+  - openpyxl
+  - xlrd
+
+  # pip section
+  - pip
+  - pip:
+      - cebra
+      - pynwb
