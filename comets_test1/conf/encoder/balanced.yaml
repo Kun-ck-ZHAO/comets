@@ -1,0 +1,17 @@
+# @package _global_
+# Balanced (small): both modalities use the same small encoder.
+# Good baseline — equal capacity for spike and LFP streams.
+
+encoder_name: balanced
+
+modA:
+  emb_dim:    16
+  hidden:     32
+  num_blocks: 2
+  win_len:    8
+
+modB:
+  emb_dim:    16
+  hidden:     32
+  num_blocks: 2
+  win_len:    8

@@ -38,9 +38,8 @@ from .unit_train import train_unit
 # --- evaluation ---
 from .unit_eval import (
     ratemap_correlation,
-    place_cell_enrichment,
+    si_gradient_correlation,
     split_half_stability,
-    nn_purity,
 )
 
 # --- viz ---
@@ -78,8 +77,8 @@ __all__ = [
     "train_unit",
 
     # evaluation
-    "ratemap_correlation", "place_cell_enrichment",
-    "split_half_stability", "nn_purity",
+    "ratemap_correlation", "si_gradient_correlation",
+    "split_half_stability",
 
     # viz
     "plotemb2",

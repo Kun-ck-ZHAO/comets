@@ -1,0 +1,18 @@
+# Output directories (large binary files, fully regenerable)
+runs/
+.hydra_logs/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Notebooks
+.ipynb_checkpoints/
+*copy*.ipynb
+
+# Misc
+.DS_Store

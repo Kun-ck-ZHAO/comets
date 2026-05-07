@@ -1,0 +1,25 @@
+# conf/eval.yaml  — CoMETs evaluation config
+# Usage:
+#   python eval.py run_dir=runs/ec013.157_a0.2_b0.8_p8_lc1.0_lx1.0_du8
+#   for d in runs/*/; do python eval.py run_dir=$d; done
+
+defaults:
+  - _self_
+
+run_dir: ???                          # required: path to a runs/{run_name}/ directory
+results_csv: results/results.csv      # output CSV (appended, header written on first row)
+
+# ── 10-fold contiguous CV ─────────────────────────────────────────────────────
+n_folds:  10
+win_size: 10    # non-overlapping window size in bins (~200 ms at 50 Hz)
+
+# ── Ratemap / SI ──────────────────────────────────────────────────────────────
+n_bins:   40    # spatial bins for ratemaps
+sigma:    2.0   # gaussian smoothing (bins)
+
+# ── Hydra internals ───────────────────────────────────────────────────────────
+hydra:
+  run:
+    dir: .hydra_logs/eval/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  job:
+    chdir: false

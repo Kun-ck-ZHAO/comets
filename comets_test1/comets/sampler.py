@@ -27,13 +27,11 @@ def _gather_windows(X: torch.Tensor, idx: torch.Tensor, win_len: int) -> torch.T
 
 class LatentSampler:
     """
-    Temporal index sampler for Stage 1 (and Stage 2 time groups).
+    Temporal index sampler shared by Stage 1 and Stage 2.
     Returns only indices; negatives are the in-batch pool with temporal
     masking handled in the loss.
     """
-    def __init__(self, modA_cfg, modB_cfg, sampling_cfg, device: torch.device):
-        self.win_len_A = modA_cfg.win_len
-        self.win_len_B = modB_cfg.win_len
+    def __init__(self, sampling_cfg, device: torch.device):
         self.batch_size = sampling_cfg.batch_size
         self.pos_offset = sampling_cfg.pos_offset
         self.device = device

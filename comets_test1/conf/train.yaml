@@ -1,0 +1,56 @@
+# conf/train.yaml  — CoMETs training config
+# Usage:
+#   python train.py                                          # defaults
+#   python train.py session=ec013.252                        # different session
+#   python train.py encoder=heavy_spike                      # swap encoder preset
+#   python train.py stage1.alpha_cross=0.0                  # single override
+#   python train.py --multirun \
+#     session=440,441,442,ec013.156,ec013.157 \
+#     encoder=balanced,heavy_spike,heavy_lfp \
+#     stage1.alpha_cross=0.0,0.2 stage1.beta=0.5,0.8
+
+defaults:
+  - _self_
+  - encoder: balanced    # encoder preset: balanced | heavy_spike | heavy_lfp
+
+# ── Run identity ──────────────────────────────────────────────────────────────
+run_name: null        # null = auto-generated from params; set explicitly to name a run
+
+# ── Data ──────────────────────────────────────────────────────────────────────
+session: ec013.157
+data_dir: /mnt/d/comets/data/crcns_mouse   # override to your data root
+
+# ── Stage 1 — Latent population encoder ──────────────────────────────────────
+stage1:
+  proj_dim:    8      # latent dimension D
+  alpha_cross: 0.2   # cross-modal (spike↔LFP) loss weight
+  beta:        0.8   # spike weight in within-modality loss  (1−β = LFP weight)
+  epochs:      100
+  lr:          1.0e-3
+
+# ── Stage 2 — Unit identity encoder ──────────────────────────────────────────
+stage2:
+  d_u:          8     # unit embedding dimension
+  lambda_coact: 1.0   # co-activity loss weight
+  lambda_ctx:   1.0   # context-conditioned loss weight
+  epochs:       100
+  lr:           1.0e-3
+
+# ── Shared training ───────────────────────────────────────────────────────────
+training:
+  batch_size:         256
+  pos_offset:         5    # positive pair temporal offset (bins)
+  negative_mask_dist: 16   # mask nearby bins as non-negatives (bins)
+
+# ── Output ────────────────────────────────────────────────────────────────────
+runs_dir: runs    # run directory: {runs_dir}/{run_name}/
+
+# ── Hydra internals ───────────────────────────────────────────────────────────
+hydra:
+  run:
+    dir: .hydra_logs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  sweep:
+    dir: .hydra_logs/multirun/${now:%Y-%m-%d_%H-%M-%S}
+    subdir: ${hydra.job.num}
+  job:
+    chdir: false    # keep working directory unchanged

@@ -1,0 +1,34 @@
+# conf/unit_train.yaml — Stage 2: unit identity encoder
+# Usage:
+#   python unit_train.py latent_run_dir=runs/latent/balanced_only_within_p8
+#   python unit_train.py latent_run_dir=... latent_ckp=last \
+#       stage2.lambda_coact=0.75 stage2.lambda_ctx=0.25
+
+# ── Input ─────────────────────────────────────────────────────────────────────
+latent_run_dir: ???    # required: path to runs/latent/{run_name}/
+latent_ckp: best       # best | last
+
+# ── Stage 2 ───────────────────────────────────────────────────────────────────
+stage2:
+  d_u:          8
+  lambda_coact: 0.5
+  lambda_ctx:   0.5
+  epochs:       200
+  lr:           1.0e-3
+
+# ── Sampling ──────────────────────────────────────────────────────────────────
+training:
+  batch_size: 256
+
+# ── Eval ──────────────────────────────────────────────────────────────────────
+eval_every: 20
+
+# ── Output ────────────────────────────────────────────────────────────────────
+runs_dir: runs/unit
+
+# ── Hydra ─────────────────────────────────────────────────────────────────────
+hydra:
+  run:
+    dir: .hydra_logs/unit/${now:%Y-%m-%d_%H-%M-%S}
+  job:
+    chdir: false

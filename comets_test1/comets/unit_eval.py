@@ -2,44 +2,42 @@
 """
 Stage 2 evaluation metrics for the unit embedding space E [N, d_u].
 
-Primary:
-  ratemap_correlation    — Spearman between pairwise embedding distance and ratemap similarity
-  place_cell_enrichment  — permutation test: are place cells more clustered in E than chance?
-
-Secondary:
-  split_half_stability   — Procrustes alignment of two E matrices trained on disjoint halves
-  nn_purity              — k-NN label purity given cell-type labels
-
-Baselines (used externally):
-  random nn.Embedding and PCA of mean firing rate profiles.
+Metrics
+-------
+ratemap_correlation     — Spearman ρ between pairwise embedding cosine similarity
+                          and pairwise ratemap cosine similarity
+si_gradient_correlation — Spearman ρ between pairwise |SI_i − SI_j| and pairwise
+                          embedding cosine distance (1 − cos sim)
+split_half_stability    — Procrustes-aligned mean cosine similarity between two E
+                          matrices trained on disjoint temporal halves
 """
 
 from __future__ import annotations
 import numpy as np
 from scipy.stats import spearmanr
 from scipy.spatial.distance import cdist
+from scipy.linalg import orthogonal_procrustes
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _to_np(x):
-    """Accept ndarray, torch tensor, or list."""
+def _to_np(x) -> np.ndarray:
     if hasattr(x, "detach"):
         return x.detach().cpu().numpy()
     return np.asarray(x, dtype=float)
 
 
-def _pairwise_distances(E: np.ndarray) -> np.ndarray:
-    """Euclidean pairwise distance matrix [N, N], upper-triangle entries."""
-    return cdist(E, E, metric="euclidean")
+def _cosine_sim_matrix(E: np.ndarray) -> np.ndarray:
+    """[N, N] cosine similarity matrix from row-normalised E."""
+    norm = np.linalg.norm(E, axis=1, keepdims=True) + 1e-8
+    E_n = E / norm
+    return E_n @ E_n.T
 
 
 def _upper_tri(M: np.ndarray) -> np.ndarray:
-    """Return upper-triangle (excluding diagonal) as a flat vector."""
-    N = M.shape[0]
-    idx = np.triu_indices(N, k=1)
+    idx = np.triu_indices(M.shape[0], k=1)
     return M[idx]
 
 
@@ -49,83 +47,69 @@ def _upper_tri(M: np.ndarray) -> np.ndarray:
 
 def ratemap_correlation(E, ratemaps) -> tuple[float, float]:
     """
-    Spearman correlation between pairwise embedding distance (in E) and
-    pairwise ratemap dissimilarity.
+    Spearman ρ between pairwise embedding cosine similarity and pairwise
+    ratemap cosine similarity.
 
     Args:
         E:        [N, d_u] unit embeddings
-        ratemaps: [N, ...] rate-map array per neuron (any shape after N;
-                  will be flattened per neuron before computing cosine distance)
+        ratemaps: [N, ...] rate-map per neuron (flattened to [N, bins])
 
     Returns:
-        (rho, p_value) — Spearman rho and two-tailed p-value.
-        Positive rho is good: neurons close in E have similar rate maps.
-        Returns (nan, nan) if fewer than 2 active neurons remain after filtering.
+        (rho, p_value) — positive rho means neurons close in E have similar
+        spatial tuning.  Returns (nan, nan) if fewer than 2 active neurons.
     """
     E = _to_np(E)
-    R = _to_np(ratemaps).reshape(E.shape[0], -1)   # [N, bins]
+    R = _to_np(ratemaps).reshape(E.shape[0], -1)
 
-    # Silent neurons (zero-norm rate maps) produce NaN cosine distances.
-    # Exclude them from both E and R before computing pairwise metrics.
-    active = np.linalg.norm(R, axis=1) > 0          # [N] bool
-    n_active = active.sum()
-    if n_active < 2:
+    active = np.linalg.norm(R, axis=1) > 0
+    if active.sum() < 2:
         return float("nan"), float("nan")
     E = E[active]
     R = R[active]
 
-    emb_dist  = _upper_tri(_pairwise_distances(E))
-    rate_dist = _upper_tri(cdist(R, R, metric="cosine"))
+    emb_sim  = _upper_tri(_cosine_sim_matrix(E))
+    rate_sim = _upper_tri(_cosine_sim_matrix(R))
 
-    rho, p = spearmanr(emb_dist, rate_dist)
+    rho, p = spearmanr(emb_sim, rate_sim)
     return float(rho), float(p)
 
 
 # ---------------------------------------------------------------------------
-# 2. Place-cell enrichment
+# 2. SI gradient correlation
 # ---------------------------------------------------------------------------
 
-def place_cell_enrichment(E, is_place_cell, n_perms: int = 1000,
-                          seed: int = 0) -> tuple[float, float]:
+def si_gradient_correlation(E, si_values) -> tuple[float, float]:
     """
-    Permutation test: are place cells more tightly clustered in E than chance?
+    Spearman ρ between pairwise |SI_i − SI_j| and pairwise embedding cosine
+    distance (1 − cosine similarity).
 
-    Statistic: mean pairwise Euclidean distance among place cells (lower = more clustered).
+    Tests whether neurons with similar spatial information scores are
+    geometrically close in the embedding space — without requiring a
+    binary place-cell label.
 
     Args:
-        E:             [N, d_u] unit embeddings
-        is_place_cell: [N] bool array
-        n_perms:       number of permutations
-        seed:          numpy RNG seed for reproducibility
+        E:         [N, d_u] unit embeddings
+        si_values: [N] spatial information in bits/spike
 
     Returns:
-        (observed_stat, p_value)
-        p_value is the fraction of permutations with stat <= observed (one-tailed).
+        (rho, p_value) — positive rho means SI-similar neurons cluster together.
+        Returns (nan, nan) if fewer than 2 neurons have finite SI.
     """
     E  = _to_np(E)
-    pc = np.asarray(is_place_cell, dtype=bool)
-    n_pc = pc.sum()
+    si = _to_np(si_values).ravel()
 
-    if n_pc < 2:
-        raise ValueError("Need at least 2 place cells for enrichment test.")
+    valid = np.isfinite(si)
+    if valid.sum() < 2:
+        return float("nan"), float("nan")
+    E  = E[valid]
+    si = si[valid]
 
-    D = _pairwise_distances(E)
+    N = len(si)
+    si_diff  = np.abs(si[:, None] - si[None, :])   # [N, N]
+    emb_dist = 1.0 - _cosine_sim_matrix(E)          # [N, N] cosine distance
 
-    def _cluster_stat(mask):
-        idx = np.where(mask)[0]
-        sub = D[np.ix_(idx, idx)]
-        return _upper_tri(sub).mean()
-
-    observed = _cluster_stat(pc)
-
-    rng = np.random.default_rng(seed)
-    null = np.array([
-        _cluster_stat(rng.permutation(pc))
-        for _ in range(n_perms)
-    ])
-
-    p_value = float((null <= observed).mean())
-    return float(observed), p_value
+    rho, p = spearmanr(_upper_tri(si_diff), _upper_tri(emb_dist))
+    return float(rho), float(p)
 
 
 # ---------------------------------------------------------------------------
@@ -134,63 +118,22 @@ def place_cell_enrichment(E, is_place_cell, n_perms: int = 1000,
 
 def split_half_stability(E1, E2) -> float:
     """
-    Procrustes-aligned similarity between two unit embedding matrices trained
-    on non-overlapping temporal halves.
-
-    Applies orthogonal Procrustes (no reflection) to align E2 onto E1,
-    then returns mean cosine similarity between aligned pairs.
+    Procrustes-aligned mean cosine similarity between two unit embedding
+    matrices trained on non-overlapping temporal halves.
 
     Args:
-        E1, E2: [N, d_u] — embeddings from two independent training runs
-                           (must have the same N with matched unit ordering)
+        E1, E2: [N, d_u] — matched unit ordering, same shape
 
     Returns:
         mean cosine similarity in [−1, 1]; higher = more stable.
     """
-    from scipy.linalg import orthogonal_procrustes
-
     E1 = _to_np(E1)
     E2 = _to_np(E2)
     assert E1.shape == E2.shape, "E1 and E2 must have matching shape [N, d_u]"
 
-    R, _ = orthogonal_procrustes(E2, E1)   # find R s.t. ||E2 R - E1||_F is min
-    E2_aligned = E2 @ R                    # [N, d_u]
+    R, _ = orthogonal_procrustes(E2, E1)
+    E2_aligned = E2 @ R
 
-    # cosine similarity per neuron pair
     n1 = E1 / (np.linalg.norm(E1, axis=1, keepdims=True) + 1e-8)
     n2 = E2_aligned / (np.linalg.norm(E2_aligned, axis=1, keepdims=True) + 1e-8)
     return float((n1 * n2).sum(axis=1).mean())
-
-
-# ---------------------------------------------------------------------------
-# 4. Nearest-neighbour purity
-# ---------------------------------------------------------------------------
-
-def nn_purity(E, labels, k: int = 5) -> float:
-    """
-    k-NN label purity: fraction of k nearest neighbours sharing the same label.
-
-    Useful when cell-type labels are available (e.g. pyramidal vs interneuron).
-
-    Args:
-        E:      [N, d_u] unit embeddings
-        labels: [N] integer or string labels
-        k:      number of nearest neighbours (excluding self)
-
-    Returns:
-        mean purity in [0, 1]; higher = more label-coherent geometry.
-    """
-    E = _to_np(E)
-    labels = np.asarray(labels)
-    D = _pairwise_distances(E)   # [N, N]
-
-    N = E.shape[0]
-    purities = []
-    for i in range(N):
-        row = D[i].copy()
-        row[i] = np.inf                       # exclude self
-        nn_idx = np.argpartition(row, k)[:k]  # k nearest
-        purity = (labels[nn_idx] == labels[i]).mean()
-        purities.append(purity)
-
-    return float(np.mean(purities))

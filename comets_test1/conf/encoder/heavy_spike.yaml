@@ -1,0 +1,17 @@
+# @package _global_
+# Heavy-spike: larger capacity on the spike encoder (modA), small LFP encoder.
+# Use when spike population activity dominates the signal of interest.
+
+encoder_name: heavy_spike
+
+modA:
+  emb_dim:    32
+  hidden:     64
+  num_blocks: 4
+  win_len:    8
+
+modB:
+  emb_dim:    16
+  hidden:     32
+  num_blocks: 2
+  win_len:    8

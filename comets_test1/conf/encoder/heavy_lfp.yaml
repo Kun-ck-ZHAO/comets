@@ -1,0 +1,17 @@
+# @package _global_
+# Heavy-LFP: larger capacity on the LFP encoder (modB), small spike encoder.
+# Use when LFP oscillatory structure carries the richer signal.
+
+encoder_name: heavy_lfp
+
+modA:
+  emb_dim:    16
+  hidden:     32
+  num_blocks: 2
+  win_len:    8
+
+modB:
+  emb_dim:    32
+  hidden:     64
+  num_blocks: 4
+  win_len:    8

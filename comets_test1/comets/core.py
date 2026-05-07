@@ -80,7 +80,9 @@ def train_latent(A, modA: ModalityConfig,
                  B, modB: ModalityConfig,
                  sampling: SamplingConfig,
                  cfg: LatentTrainingConfig,
-                 device: Optional[torch.device] = None) -> CoMETsModel:
+                 device: Optional[torch.device] = None,
+                 epoch_callback=None,
+                 eval_every: int = 20) -> CoMETsModel:
 
     # --- device + data prep ---
     device = device or _device()
@@ -108,7 +110,7 @@ def train_latent(A, modA: ModalityConfig,
 
     # --- Loss and Sampler ---
     loss_fn = InfoNCELoss(cfg.temperature)
-    sampler = LatentSampler(modA, modB, sampling, device)
+    sampler = LatentSampler(sampling, device)
     Bsize, Poff = sampling.batch_size, sampling.pos_offset
     total_epochs = cfg.epochs
 
@@ -168,6 +170,12 @@ def train_latent(A, modA: ModalityConfig,
         pbar.set_postfix_str(
             f"total={avg_total:.4f}, within={avg_within:.4f}, cross={avg_cross:.4f}, lr={scheduler.get_last_lr()[0]:.2e}"
         )
+
+        if epoch_callback is not None and (ep + 1) % eval_every == 0:
+            _model = CoMETsModel(encA, encB, projA, projB, device=device,
+                                 win_len_A=modA.win_len, win_len_B=modB.win_len)
+            epoch_callback(ep + 1, _model)
+            encA.train(); encB.train(); projA.train(); projB.train()
 
     return CoMETsModel(encA, encB, projA, projB, device=device,
                        win_len_A=modA.win_len, win_len_B=modB.win_len)

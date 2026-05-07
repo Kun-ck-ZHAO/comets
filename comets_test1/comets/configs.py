@@ -40,9 +40,7 @@ class UnitTrainingConfig:
     weight_decay: float = 1e-5
     d_u: int = 8            # unit embedding dimension
     m_units: int = 32       # units sampled per step per pool (M)
+    win_len: int = 5        # sub-window length for spike window dot product
     temperature: float = 0.1
     lambda_coact: float = 1.0
     lambda_ctx: float = 1.0
-    lambda_spike_ctx: float = 1.0   # relative weight of spike latent in ctx_sim
-    lambda_lfp_ctx: float = 1.0     # relative weight of LFP latent in ctx_sim
-                                    # ignored if lfp not passed to train_unit
